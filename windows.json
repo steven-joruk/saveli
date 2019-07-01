@@ -1,0 +1,15 @@
+{
+    "version": 1,
+    "games": [
+        {
+            "title": "Dark Souls III",
+            "id": "DarkSoulsIII",
+            "saves": [
+                {
+                    "id": "general",
+                    "path": "${APPDATA}\\DarkSoulsIII"
+                }
+            ]
+        }
+    ]
+}
