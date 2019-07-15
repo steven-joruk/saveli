@@ -1,8 +1,6 @@
 use crate::game::Game;
-
 use crate::errors::*;
 use serde::Deserialize;
-use serde_json;
 
 const VERSION: usize = 1;
 
@@ -13,8 +11,8 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn load(data: &str) -> Result<Database> {
-        let db: Database = serde_json::from_str(data)?;
+    pub fn load<T: AsRef<str>>(data: T) -> Result<Database> {
+        let db: Database = serde_json::from_str(data.as_ref())?;
 
         if db.version > VERSION {
             bail!(ErrorKind::DatabaseTooNew(db.version, VERSION));
@@ -32,18 +30,18 @@ mod tests {
     #[test]
     fn test_load_older_version_succeeds() {
         let json = json!({ "version": VERSION - 1, "games": [] });
-        assert!(Database::load(&json.to_string()).is_ok());
+        Database::load(json.to_string()).unwrap();
     }
 
     #[test]
     fn test_load_current_version_succeeds() {
         let json = json!({ "version": VERSION, "games": [] });
-        assert!(Database::load(&json.to_string()).is_ok());
+        Database::load(json.to_string()).unwrap();
     }
 
     #[test]
     fn test_load_newer_version_fails() {
         let json = json!({ "version": VERSION + 1, "games": [] });
-        assert!(Database::load(&json.to_string()).is_err());
+        Database::load(json.to_string()).unwrap_err();
     }
 }

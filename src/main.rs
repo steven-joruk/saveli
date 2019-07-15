@@ -61,17 +61,13 @@ fn main() {
         return;
     }
 
-    let path = "windows.json";
+    let windows_data = include_str!("../res/windows.json");
 
-    let data = std::fs::read_to_string(path).unwrap_or_else(|err| {
-        panic!("Failed to load {}: {}", path, err);
+    let db = Database::load(windows_data).unwrap_or_else(|err| {
+        panic!("Failed to parse windows database: {}", err);
     });
 
-    let db = Database::load(&data).unwrap_or_else(|err| {
-        panic!("Failed to parse {}: {}", path, err);
-    });
-
-    println!("Loaded {} games from {}", db.games.len(), path);
+    println!("Loaded {} database entries", db.games.len());
 
     let matches = get_options();
     let storage_path = Path::new(matches.value_of("storage-path").unwrap());
