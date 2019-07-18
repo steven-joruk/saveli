@@ -10,7 +10,7 @@ use clap::{App, AppSettings, Arg, ArgGroup, ArgMatches};
 use database::Database;
 use game::Game;
 use linker::Linker;
-use std::path::Path;
+use std::path::PathBuf;
 
 fn get_options() -> ArgMatches<'static> {
     App::new("Saveli")
@@ -61,16 +61,12 @@ fn main() {
         return;
     }
 
-    let windows_data = include_str!("../res/windows.json");
+    let matches = get_options();
+    let storage_path = PathBuf::from(matches.value_of("storage-path").unwrap());
 
-    let db = Database::load(windows_data).unwrap_or_else(|err| {
+    let db = Database::new(&storage_path).unwrap_or_else(|err| {
         panic!("Failed to parse windows database: {}", err);
     });
-
-    println!("Loaded {} database entries", db.games.len());
-
-    let matches = get_options();
-    let storage_path = Path::new(matches.value_of("storage-path").unwrap());
 
     if matches.is_present("link") {
         let movable = Game::all_with_saves(&db.games);

@@ -1,6 +1,8 @@
 use crate::game::Game;
 use crate::errors::*;
 use serde::Deserialize;
+use std::path::Path;
+use std::io::Write;
 
 const VERSION: usize = 1;
 
@@ -11,7 +13,25 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn load<T: AsRef<str>>(data: T) -> Result<Database> {
+    pub fn new<T: AsRef<Path>>(storage_path: T) -> Result<Database> {
+        let windows_path = storage_path.as_ref().join("windows.json");
+        if !windows_path.exists() {
+            println!("Creating {}", windows_path.display());
+            let mut f = std::fs::File::create(&windows_path)?;
+            f.write(include_bytes!("../res/windows.json"))?;
+        }
+
+        Database::load_from(&windows_path)
+    }
+
+    fn load_from<T: AsRef<Path>>(path: T) -> Result<Database> {
+        let data = std::fs::read_to_string(&path)?;
+        let db = Database::load(data)?;
+        println!("Loaded {} game entries from {}", db.games.len(), path.as_ref().display());
+        Ok(db)
+    }
+
+    fn load<T: AsRef<str>>(data: T) -> Result<Database> {
         let db: Database = serde_json::from_str(data.as_ref())?;
 
         if db.version > VERSION {
