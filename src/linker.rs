@@ -15,7 +15,12 @@ impl Linker {
     pub fn check_reparse_privilege() -> Result<()> {
         let src = tempfile::tempdir()?.into_path().join("src");
         let dest = tempfile::tempdir()?.into_path();
-        Linker::symlink(&src, &dest).chain_err(|| ErrorKind::FailedToLink(src, dest))
+
+        if Linker::symlink(&src, &dest).is_err() {
+            bail!(ErrorKind::LinkPermission);
+        }
+
+        Ok(())
     }
 
     /// Create a symbolic link from `from` to `to`. `from` must not exist, and
@@ -38,6 +43,7 @@ impl Linker {
                         bail!(ErrorKind::AlreadyLinked(target));
                     }
                 }
+
                 if md.is_dir() || md.is_file() {
                     bail!(ErrorKind::SourceExists(from.to_path_buf()));
                 }

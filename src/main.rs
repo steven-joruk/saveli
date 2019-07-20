@@ -1,18 +1,21 @@
-#[macro_use]
-extern crate error_chain;
+#![recursion_limit="128"]
+#[macro_use] extern crate error_chain;
 
 mod database;
 mod errors;
 mod game;
 mod linker;
+mod settings;
 
-use clap::{App, AppSettings, Arg, ArgGroup, ArgMatches};
+use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use database::Database;
+use errors::*;
 use game::Game;
 use linker::Linker;
+use settings::Settings;
 use std::path::PathBuf;
 
-fn get_options() -> ArgMatches<'static> {
+fn get_command_line_matches() -> ArgMatches<'static> {
     App::new("Saveli")
         .version(env!("CARGO_PKG_VERSION"))
         .version_short("v")
@@ -20,84 +23,100 @@ fn get_options() -> ArgMatches<'static> {
         .about("Moves game saves and creates links in their place.")
         .setting(AppSettings::ArgRequiredElseHelp)
         .setting(AppSettings::DisableHelpSubcommand)
-        .arg(
-            Arg::with_name("link")
-                .short("l")
-                .long("link")
-                .help(
+        .subcommand(
+            SubCommand::with_name("set-storage-path")
+                .about("Set where game saves and meta data should be stored.")
+                .arg(Arg::with_name("path")
+                    .index(1)
+                    .required(true)
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("link")
+                .about(
                     "Move game saves from their original locations to the \
                      storage path and create links to their new location."
                 )
         )
-        .arg(
-            Arg::with_name("restore")
-                .short("r")
-                .long("--restore")
-                .help(
+        .subcommand(
+            SubCommand::with_name("restore")
+                .about(
                     "Creates links to game saves which have been moved to the \
                      storage path."
                 )
         )
-        .group(
-            ArgGroup::with_name("command")
-                .args(&["link", "restore"])
-                .required(true)
-        )
-        .arg(
-            Arg::with_name("storage-path")
-                .index(1)
-                .required(true)
-                .help("The location game saves and meta data should be stored.")
-        )
         .get_matches()
 }
 
-fn main() {
-    if Linker::check_reparse_privilege().is_err() {
-        eprintln!(
-            "You don't have the required privileges to create links. Try running as administrator."
-        );
+fn link(db: &Database, settings: &Settings) -> Result<()> {
+    let movable = Game::all_with_saves(&db.games);
+    println!(
+        "Found {} games with saves in their standard locations",
+        movable.len()
+    );
 
-        return;
+    for game in movable {
+        if let Err(e) = game.move_and_link(&settings.storage_path) {
+            eprintln!("{}", e);
+        }
     }
 
-    let matches = get_options();
-    let storage_path = PathBuf::from(matches.value_of("storage-path").unwrap());
+    Ok(())
+}
 
-    let db = Database::new(&storage_path).unwrap_or_else(|err| {
-        panic!("Failed to parse windows database: {}", err);
-    });
+fn restore(db: &Database, settings: &Settings) -> Result<()> {
+    let restorable = Game::all_with_moved_saves(&db.games, &settings.storage_path);
+    println!(
+        "Found {} games with saves moved to {}",
+        restorable.len(),
+        settings.storage_path.display()
+    );
 
-    if matches.is_present("link") {
-        let movable = Game::all_with_saves(&db.games);
-        println!(
-            "Found {} games with saves in their standard locations",
-            movable.len()
-        );
+    for game in restorable {
+        if let Err(e) = game.restore(&settings.storage_path) {
+            eprintln!("{}", e);
+        }
+    }
 
-        for game in movable {
-            if let Err(e) = game.move_and_link(&storage_path) {
-                eprintln!("{}", e);
+    Ok(())
+}
+
+fn main() -> Result<()> {
+    let mut settings = Settings::load();
+
+    let matches = get_command_line_matches();
+    let (sub_name, sub_matches) = matches.subcommand();
+    if sub_name == "set-storage-path" {
+        let path_str = sub_matches.unwrap().value_of("path").unwrap();
+        let path = PathBuf::from(path_str);
+        if let Err(e) = std::fs::create_dir_all(&path) {
+            if e.kind() != std::io::ErrorKind::AlreadyExists {
+                bail!(e);
             }
         }
 
-        return;
+        settings.storage_path = match path.canonicalize() {
+            Ok(p) => p,
+            Err(_) => bail!(ErrorKind::Canonicalize(path)),
+        };
+
+        settings.save()?;
+        return Ok(());
     }
 
-    if matches.is_present("restore") {
-        let restorable = Game::all_with_moved_saves(&db.games, &storage_path);
-        println!(
-            "Found {} games with saves moved to {}",
-            restorable.len(),
-            storage_path.display()
-        );
-
-        for game in restorable {
-            if let Err(e) = game.restore(&storage_path) {
-                eprintln!("{}", e);
-            }
-        }
-
-        return;
+    if !settings.storage_path.is_absolute() {
+        bail!(ErrorKind::StoragePathNotSet);
     }
+
+    Linker::check_reparse_privilege()?;
+
+    let db = Database::new(&settings.storage_path)?;
+
+    match sub_name {
+        "link" => link(&db, &settings)?,
+        "restore" => restore(&db, &settings)?,
+        _ => unreachable!(),
+    }
+
+    Ok(())
 }
