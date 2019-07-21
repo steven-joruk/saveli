@@ -42,6 +42,10 @@ impl Game {
         games.iter().filter(|g| g.has_saves()).collect()
     }
 
+    pub fn all_with_movable_saves(games: &[Game]) -> Vec<&Game> {
+        games.iter().filter(|g| g.has_movable_saves()).collect()
+    }
+
     /// Returns games which have saves in the storage path.
     pub fn all_with_moved_saves<'g>(games: &'g [Game], storage_path: &Path) -> Vec<&'g Game> {
         games
@@ -53,7 +57,7 @@ impl Game {
 
     /// Attempts to move the game's save paths to the storage location and
     /// create corresponding links.
-    pub fn move_and_link(&self, storage_path: &Path, dry_run: bool) -> Result<()> {
+    pub fn link(&self, storage_path: &Path, dry_run: bool) -> Result<()> {
         let game_storage_path = storage_path.join(&self.id);
         if !dry_run {
             if let Err(e) = std::fs::create_dir_all(&game_storage_path) {
@@ -73,7 +77,14 @@ impl Game {
             );
 
             if !dry_run {
-                Linker::move_and_link(&s.path, &dest)?
+                println!("Moving {} to {}", s.path.display(), dest.display());
+                Linker::move_item(&s.path, &dest)?;
+                println!(
+                    "Creating a link from {} to {}",
+                    s.path.display(),
+                    dest.display()
+                );
+                Linker::symlink(&s.path, &dest)?;
             }
         }
 
@@ -100,8 +111,46 @@ impl Game {
         Ok(())
     }
 
+    /// The inverse of link.
+    pub fn unlink(&self, storage_path: &Path, dry_run: bool) -> Result<()> {
+        for s in &self.saves {
+            let dest = storage_path.join(&self.id).join(&s.id);
+            // TODO: Check it exists
+            println!(
+                "Unlinking {}'s {} from {}",
+                self.title,
+                s.path.display(),
+                dest.display()
+            );
+
+            if !dry_run {
+                println!("Removing {}", s.path.display());
+                std::fs::remove_dir(&s.path)?;
+                println!("Moving {} to {}", dest.display(), s.path.display());
+                Linker::move_item(&dest, &s.path)?;
+            }
+        }
+
+        if !dry_run {
+            let game_storage_path = storage_path.join(&self.id);
+            println!("Removing {}", game_storage_path.display());
+            std::fs::remove_dir(game_storage_path)?;
+        }
+
+        Ok(())
+    }
+
     fn has_saves(&self) -> bool {
         self.saves.iter().any(|s| Path::exists(&s.path))
+    }
+
+    fn has_movable_saves(&self) -> bool {
+        self.saves
+            .iter()
+            .any(|s| match std::fs::symlink_metadata(&s.path) {
+                Ok(md) => !md.file_type().is_symlink(),
+                Err(_) => false,
+            })
     }
 }
 
@@ -148,7 +197,7 @@ mod tests {
     }
 
     #[test]
-    fn test_move_and_link_file() {
+    fn test_link_file() {
         let src = tempfile::NamedTempFile::new().unwrap().into_temp_path();
         assert!(src.exists());
         let game = Game {
@@ -160,7 +209,7 @@ mod tests {
             ..Default::default()
         };
         let storage_path = tempfile::tempdir().unwrap().into_path();
-        Game::move_and_link(&game, &storage_path, false).unwrap();
+        Game::link(&game, &storage_path, false).unwrap();
         let dest = storage_path.join(&game.id).join("saveid");
         assert_eq!(std::fs::read_link(&src).unwrap(), dest);
     }
@@ -178,7 +227,7 @@ mod tests {
             ..Default::default()
         };
         let storage_path = tempfile::tempdir().unwrap().into_path();
-        Game::move_and_link(&game, &storage_path, false).unwrap();
+        Game::link(&game, &storage_path, false).unwrap();
         let dest = storage_path.join(&game.id).join("saveid");
         assert_eq!(std::fs::read_link(&src).unwrap(), dest);
     }
@@ -199,7 +248,7 @@ mod tests {
         let dest = storage_path.join(&game.id).join("saveid");
         std::fs::create_dir_all(&storage_path.join(&game.id)).unwrap();
         std::fs::File::create(&dest).unwrap();
-        Game::move_and_link(&game, &storage_path, false).unwrap();
+        Game::link(&game, &storage_path, false).unwrap();
     }
 
     #[test]
@@ -217,7 +266,7 @@ mod tests {
         let storage_path = tempfile::tempdir().unwrap().into_path();
         let dest = storage_path.join(&game.id).join("saveid");
         std::fs::create_dir_all(&dest).unwrap();
-        Game::move_and_link(&game, &storage_path, false).unwrap();
+        Game::link(&game, &storage_path, false).unwrap();
     }
 
     #[test]
@@ -231,4 +280,6 @@ mod tests {
 
     #[test]
     fn test_restore_existing_file() {}
+
+    // TODO: Unlink tests
 }

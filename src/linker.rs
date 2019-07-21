@@ -8,8 +8,6 @@ use tempfile;
 
 pub struct Linker;
 
-// TODO: create a static CopyOptions instance with overwrite = true
-
 impl Linker {
     #[cfg(windows)]
     pub fn check_reparse_privilege() -> Result<()> {
@@ -64,7 +62,7 @@ impl Linker {
         std::os::unix::fs::symlink(to, from)
     }
 
-    fn move_item(src: &Path, dest: &Path) -> Result<u64> {
+    pub fn move_item(src: &Path, dest: &Path) -> Result<u64> {
         // fs_extra doesn't attempt to rename files when possible:
         // https://github.com/webdesus/fs_extra/issues/20
         if fs::rename(src, dest).is_ok() {
@@ -82,36 +80,12 @@ impl Linker {
         fs_extra::file::move_file(src, dest, &options)
             .chain_err(|| ErrorKind::FailedToMove(src.to_path_buf(), dest.to_path_buf()))
     }
-
-    /// Attempts to move `src` to `dest`, then create a link from `src` to
-    /// `dest`.
-    pub fn move_and_link(src: &Path, dest: &Path) -> Result<()> {
-        if !src.exists() {
-            bail!(ErrorKind::SourceNotFound(src.to_path_buf()));
-        }
-
-        if dest.exists() {
-            if let Ok(target) = fs::read_link(src) {
-                if dest == target {
-                    return Ok(());
-                }
-
-                bail!(ErrorKind::AlreadyLinked(target));
-            }
-
-            bail!(ErrorKind::DestinationExists(dest.to_path_buf()));
-        }
-
-        Linker::move_item(src, dest)?;
-        Linker::symlink(src, dest)
-    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::path::Path;
-    use tempfile::{tempdir, tempdir_in, NamedTempFile};
+    use tempfile::{tempdir, NamedTempFile};
 
     #[test]
     fn symlink_src_none_dest_none() {
@@ -208,174 +182,5 @@ mod test {
         });
     }
 
-    #[test]
-    fn test_move_and_link_none() {
-        let src = tempdir().unwrap().into_path().join("src");
-        let err = Linker::move_and_link(&src, &src).unwrap_err();
-        assert!(match err.kind() {
-            ErrorKind::SourceNotFound(_) => true,
-            _ => false,
-        });
-    }
-
-    #[test]
-    fn test_move_and_link_dir() {
-        let container = tempdir().unwrap();
-
-        let src = tempdir_in(&container).unwrap().into_path();
-        assert!(Path::exists(&src));
-
-        let dest = tempdir_in(&container).unwrap().into_path().join("dest");
-        assert!(!Path::exists(&dest));
-
-        Linker::move_and_link(&src, &dest).unwrap();
-        assert_eq!(fs::read_link(src).unwrap(), dest);
-    }
-
-    #[test]
-    fn test_move_and_link_dir_to_itself() {
-        let src = tempdir().unwrap().into_path();
-        let err = Linker::move_and_link(&src, &src).unwrap_err();
-        assert!(match err.kind() {
-            ErrorKind::DestinationExists(_) => true,
-            _ => false,
-        });
-    }
-
-    #[test]
-    fn test_move_and_link_file_to_itself() {
-        let src = NamedTempFile::new().unwrap().into_temp_path();
-        let err = Linker::move_and_link(&src, &src).unwrap_err();
-        assert!(match err.kind() {
-            ErrorKind::DestinationExists(_) => true,
-            _ => false,
-        });
-    }
-
-    #[test]
-    fn test_move_and_link_dir_which_is_already_correctly_linked() {
-        let container = tempdir().unwrap().into_path();
-
-        let src = container.join("src");
-        fs::create_dir(&src).unwrap();
-        assert!(Path::exists(&src));
-
-        let dest = container.join("dest");
-        assert!(!Path::exists(&dest));
-
-        Linker::move_and_link(&src, &dest).unwrap();
-        assert_eq!(fs::read_link(&src).unwrap(), dest);
-
-        Linker::move_and_link(&src, &dest).unwrap();
-        assert_eq!(fs::read_link(&src).unwrap(), dest);
-    }
-
-    #[test]
-    fn test_move_and_link_dir_to_existing_dir() {
-        let container = tempdir().unwrap();
-
-        let src = tempdir_in(&container).unwrap().into_path();
-        assert!(Path::exists(&src));
-
-        let dest = tempdir_in(&container).unwrap().into_path();
-        assert!(Path::exists(&dest));
-
-        let e = Linker::move_and_link(&src, &dest).unwrap_err();
-        assert!(match e.kind() {
-            ErrorKind::DestinationExists(_) => true,
-            _ => false,
-        });
-    }
-
-    #[test]
-    fn test_move_and_link_dir_to_existing_file() {
-        let container = tempdir().unwrap();
-
-        let src = &tempdir_in(&container).unwrap().into_path();
-        assert!(Path::exists(src));
-
-        let dest = &NamedTempFile::new().unwrap().into_temp_path();
-        assert!(Path::exists(dest));
-
-        let e = Linker::move_and_link(src, dest).unwrap_err();
-        assert!(match e.kind() {
-            ErrorKind::DestinationExists(_) => true,
-            _ => false,
-        });
-    }
-
-    #[test]
-    fn test_move_and_link_file() {
-        let src = NamedTempFile::new().unwrap().into_temp_path();
-        assert!(Path::exists(&src));
-
-        let dest = tempdir().unwrap().into_path().join("to");
-        assert!(!Path::exists(&dest));
-
-        Linker::move_and_link(&src, &dest).unwrap();
-        assert_eq!(fs::read_link(&src).unwrap(), dest.to_path_buf());
-    }
-
-    #[test]
-    fn test_move_and_link_file_which_is_already_correctly_linked() {
-        let src = NamedTempFile::new().unwrap().into_temp_path();
-        assert!(Path::exists(&src));
-
-        let dest = tempdir().unwrap().into_path().join("to");
-        assert!(!Path::exists(&dest));
-
-        Linker::move_and_link(&src, &dest).unwrap();
-        assert_eq!(fs::read_link(&src).unwrap(), dest.to_path_buf());
-
-        Linker::move_and_link(&src, &dest).unwrap();
-        assert_eq!(fs::read_link(&src).unwrap(), dest.to_path_buf());
-    }
-
-    #[test]
-    fn test_move_and_link_file_to_existing_dir() {
-        let src = NamedTempFile::new().unwrap().into_temp_path();
-        assert!(Path::exists(&src));
-
-        let dest = tempdir().unwrap().into_path();
-        assert!(Path::exists(&dest));
-
-        let e = Linker::move_and_link(&src, &dest).unwrap_err();
-        assert!(match e.kind() {
-            ErrorKind::DestinationExists(_) => true,
-            _ => false,
-        });
-    }
-
-    #[test]
-    fn test_move_and_link_file_to_existing_file() {
-        let src = NamedTempFile::new().unwrap().into_temp_path();
-        assert!(Path::exists(&src));
-
-        let dest = NamedTempFile::new().unwrap().into_temp_path();
-        assert!(Path::exists(&dest));
-
-        let e = Linker::move_and_link(&src, &dest).unwrap_err();
-        assert!(match e.kind() {
-            ErrorKind::DestinationExists(_) => true,
-            _ => false,
-        });
-    }
-
-    #[test]
-    #[ignore]
-    fn test_move_and_link_large_directory_same_partition() {
-        assert!(false);
-    }
-
-    #[test]
-    #[ignore]
-    fn test_move_and_link_large_directory_other_partition() {
-        std::env::var("SAVELI_TEST_OTHER_PARTITION_DESTINATION").unwrap();
-    }
-
-    #[test]
-    #[ignore]
-    fn test_move_and_link_large_directory_other_disk() {
-        std::env::var("SAVELI_TEST_OTHER_DISK_DESTINATION").unwrap();
-    }
+    // TODO: test move_item
 }
