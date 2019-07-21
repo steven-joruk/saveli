@@ -53,11 +53,13 @@ impl Game {
 
     /// Attempts to move the game's save paths to the storage location and
     /// create corresponding links.
-    pub fn move_and_link(&self, storage_path: &Path) -> Result<()> {
+    pub fn move_and_link(&self, storage_path: &Path, dry_run: bool) -> Result<()> {
         let game_storage_path = storage_path.join(&self.id);
-        if let Err(e) = std::fs::create_dir_all(&game_storage_path) {
-            if e.kind() != std::io::ErrorKind::AlreadyExists {
-                return Err(Error::from(e));
+        if !dry_run {
+            if let Err(e) = std::fs::create_dir_all(&game_storage_path) {
+                if e.kind() != std::io::ErrorKind::AlreadyExists {
+                    return Err(Error::from(e));
+                }
             }
         }
 
@@ -69,7 +71,10 @@ impl Game {
                 s.path.display(),
                 dest.display()
             );
-            Linker::move_and_link(&s.path, &dest)?
+
+            if !dry_run {
+                Linker::move_and_link(&s.path, &dest)?
+            }
         }
 
         Ok(())
@@ -77,7 +82,7 @@ impl Game {
 
     /// If saves exist, it will attempt to create links. It will fail if real
     /// files or directories already exist.
-    pub fn restore(&self, storage_path: &Path) -> Result<()> {
+    pub fn restore(&self, storage_path: &Path, dry_run: bool) -> Result<()> {
         for s in &self.saves {
             let dest = storage_path.join(&self.id).join(&s.id);
             println!(
@@ -86,7 +91,10 @@ impl Game {
                 s.path.display(),
                 dest.display()
             );
-            Linker::symlink(&s.path, &dest)?;
+
+            if !dry_run {
+                Linker::symlink(&s.path, &dest)?;
+            }
         }
 
         Ok(())
@@ -152,7 +160,7 @@ mod tests {
             ..Default::default()
         };
         let storage_path = tempfile::tempdir().unwrap().into_path();
-        Game::move_and_link(&game, &storage_path).unwrap();
+        Game::move_and_link(&game, &storage_path, false).unwrap();
         let dest = storage_path.join(&game.id).join("saveid");
         assert_eq!(std::fs::read_link(&src).unwrap(), dest);
     }
@@ -170,7 +178,7 @@ mod tests {
             ..Default::default()
         };
         let storage_path = tempfile::tempdir().unwrap().into_path();
-        Game::move_and_link(&game, &storage_path).unwrap();
+        Game::move_and_link(&game, &storage_path, false).unwrap();
         let dest = storage_path.join(&game.id).join("saveid");
         assert_eq!(std::fs::read_link(&src).unwrap(), dest);
     }
@@ -191,7 +199,7 @@ mod tests {
         let dest = storage_path.join(&game.id).join("saveid");
         std::fs::create_dir_all(&storage_path.join(&game.id)).unwrap();
         std::fs::File::create(&dest).unwrap();
-        assert!(Game::move_and_link(&game, &storage_path).is_err());
+        Game::move_and_link(&game, &storage_path, false).unwrap();
     }
 
     #[test]
@@ -209,7 +217,7 @@ mod tests {
         let storage_path = tempfile::tempdir().unwrap().into_path();
         let dest = storage_path.join(&game.id).join("saveid");
         std::fs::create_dir_all(&dest).unwrap();
-        assert!(Game::move_and_link(&game, &storage_path).is_err());
+        Game::move_and_link(&game, &storage_path, false).unwrap();
     }
 
     #[test]

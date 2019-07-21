@@ -1,14 +1,19 @@
 use crate::errors::*;
+use app_dirs::{AppDataType, AppInfo};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use app_dirs::{AppDataType, AppInfo};
 
 // TODO: Get from Cargo.toml
-const APP_INFO: AppInfo = AppInfo { name: "saveli", author: "saveli-project" };
+const APP_INFO: AppInfo = AppInfo {
+    name: "saveli",
+    author: "saveli-project",
+};
 
 #[derive(Default, Deserialize, Serialize)]
 pub struct Settings {
     pub storage_path: PathBuf,
+    #[serde(skip)]
+    pub dry_run: bool,
 }
 
 impl Settings {

@@ -1,8 +1,8 @@
-use crate::game::Game;
 use crate::errors::*;
+use crate::game::Game;
 use serde::Deserialize;
-use std::path::Path;
 use std::io::Write;
+use std::path::Path;
 
 const VERSION: usize = 1;
 
@@ -27,7 +27,11 @@ impl Database {
     fn load_from<T: AsRef<Path>>(path: T) -> Result<Database> {
         let data = std::fs::read_to_string(&path)?;
         let db = Database::load(data)?;
-        println!("Loaded {} game entries from {}", db.games.len(), path.as_ref().display());
+        println!(
+            "Loaded {} game entries from {}",
+            db.games.len(),
+            path.as_ref().display()
+        );
         Ok(db)
     }
 

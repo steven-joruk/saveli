@@ -29,14 +29,22 @@ fn get_command_line_matches() -> ArgMatches<'static> {
                 .about("Set where game saves and meta data should be stored.")
                 .arg(Arg::with_name("path").index(1).required(true)),
         )
-        .subcommand(SubCommand::with_name("link").about(
-            "Move game saves from their original locations to the \
-             storage path and create links to their new location.",
-        ))
-        .subcommand(SubCommand::with_name("restore").about(
-            "Creates links to game saves which have been moved to the \
-             storage path.",
-        ))
+        .subcommand(
+            SubCommand::with_name("link")
+                .about(
+                    "Move game saves from their original locations to the \
+                     storage path and create links to their new location.",
+                )
+                .arg(Arg::with_name("dry-run").short("d").long("dry-run")),
+        )
+        .subcommand(
+            SubCommand::with_name("restore")
+                .about(
+                    "Creates links to game saves which have been moved to the \
+                     storage path.",
+                )
+                .arg(Arg::with_name("dry-run").short("d").long("dry-run")),
+        )
         .get_matches()
 }
 
@@ -75,7 +83,7 @@ fn link(db: &Database, settings: &Settings) -> Result<()> {
     );
 
     for game in movable {
-        if let Err(e) = game.move_and_link(&settings.storage_path) {
+        if let Err(e) = game.move_and_link(&settings.storage_path, settings.dry_run) {
             eprintln!("{}", e);
         }
     }
@@ -92,7 +100,7 @@ fn restore(db: &Database, settings: &Settings) -> Result<()> {
     );
 
     for game in restorable {
-        if let Err(e) = game.restore(&settings.storage_path) {
+        if let Err(e) = game.restore(&settings.storage_path, settings.dry_run) {
             eprintln!("{}", e);
         }
     }
@@ -117,11 +125,17 @@ fn run() -> Result<()> {
         );
     }
 
-    if Linker::check_reparse_privilege().is_err() {
-        bail!(
-            "You don't have the required privileges to create links. Try running as administrator"
-        );
-    }
+    settings.dry_run = if sub_matches.unwrap().is_present("dry-run") {
+        println!("This is a dry run, none of the actions will be committed.");
+        false
+    } else {
+        if Linker::check_reparse_privilege().is_err() {
+            bail!(
+                "You don't have the required privileges to create links. Try running as administrator"
+            );
+        }
+        true
+    };
 
     let db = Database::new(&settings.storage_path)?;
 
