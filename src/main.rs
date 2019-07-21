@@ -1,5 +1,6 @@
-#![recursion_limit="128"]
-#[macro_use] extern crate error_chain;
+#![recursion_limit = "128"]
+#[macro_use]
+extern crate error_chain;
 
 mod database;
 mod errors;
@@ -26,25 +27,16 @@ fn get_command_line_matches() -> ArgMatches<'static> {
         .subcommand(
             SubCommand::with_name("set-storage-path")
                 .about("Set where game saves and meta data should be stored.")
-                .arg(Arg::with_name("path")
-                    .index(1)
-                    .required(true)
-                )
+                .arg(Arg::with_name("path").index(1).required(true)),
         )
-        .subcommand(
-            SubCommand::with_name("link")
-                .about(
-                    "Move game saves from their original locations to the \
-                     storage path and create links to their new location."
-                )
-        )
-        .subcommand(
-            SubCommand::with_name("restore")
-                .about(
-                    "Creates links to game saves which have been moved to the \
-                     storage path."
-                )
-        )
+        .subcommand(SubCommand::with_name("link").about(
+            "Move game saves from their original locations to the \
+             storage path and create links to their new location.",
+        ))
+        .subcommand(SubCommand::with_name("restore").about(
+            "Creates links to game saves which have been moved to the \
+             storage path.",
+        ))
         .get_matches()
 }
 
@@ -89,18 +81,29 @@ fn main() -> Result<()> {
     if sub_name == "set-storage-path" {
         let path_str = sub_matches.unwrap().value_of("path").unwrap();
         let path = PathBuf::from(path_str);
-        if let Err(e) = std::fs::create_dir_all(&path) {
+        if path.components().next() == None {
+            bail!("You must specify a path");
+        }
+
+        settings.storage_path = if path.is_absolute() {
+            path
+        } else {
+            std::env::current_dir()?.join(path)
+        };
+
+        if let Err(e) = std::fs::create_dir_all(&settings.storage_path) {
             if e.kind() != std::io::ErrorKind::AlreadyExists {
                 bail!(e);
             }
         }
 
-        settings.storage_path = match path.canonicalize() {
-            Ok(p) => p,
-            Err(_) => bail!(ErrorKind::Canonicalize(path)),
-        };
-
         settings.save()?;
+
+        println!(
+            "Your storage path has been set to {}",
+            settings.storage_path.display()
+        );
+
         return Ok(());
     }
 

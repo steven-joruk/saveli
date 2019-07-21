@@ -18,10 +18,6 @@ error_chain! {
             display("You don't have the required privileges to create links. Try running as administrator")
         }
 
-        Canonicalize(path: PathBuf) {
-            display("Failed to convert {} to a canonical path", path.display())
-        }
-
         DestinationDoesNotExist(path: PathBuf) {
             display("No file or directory exists at {}", path.display())
         }
