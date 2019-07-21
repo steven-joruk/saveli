@@ -18,7 +18,7 @@ impl Database {
         if !windows_path.exists() {
             println!("Creating {}", windows_path.display());
             let mut f = std::fs::File::create(&windows_path)?;
-            f.write(include_bytes!("../res/windows.json"))?;
+            f.write_all(include_bytes!("../res/windows.json"))?;
         }
 
         Database::load_from(&windows_path)

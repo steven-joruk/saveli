@@ -14,7 +14,7 @@ use errors::*;
 use game::Game;
 use linker::Linker;
 use settings::Settings;
-use std::path::PathBuf;
+use std::path::Path;
 
 fn get_command_line_matches() -> ArgMatches<'static> {
     App::new("Saveli")
@@ -38,6 +38,33 @@ fn get_command_line_matches() -> ArgMatches<'static> {
              storage path.",
         ))
         .get_matches()
+}
+
+fn set_storage_path(path: &Path, settings: &mut Settings) -> Result<()> {
+    if path.components().next() == None {
+        bail!("You must specify a path");
+    }
+
+    settings.storage_path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+
+    if let Err(e) = std::fs::create_dir_all(&settings.storage_path) {
+        if e.kind() != std::io::ErrorKind::AlreadyExists {
+            bail!(e);
+        }
+    }
+
+    settings.save()?;
+
+    println!(
+        "Your storage path has been set to {}",
+        settings.storage_path.display()
+    );
+
+    Ok(())
 }
 
 fn link(db: &Database, settings: &Settings) -> Result<()> {
@@ -73,45 +100,28 @@ fn restore(db: &Database, settings: &Settings) -> Result<()> {
     Ok(())
 }
 
-fn main() -> Result<()> {
+fn run() -> Result<()> {
     let mut settings = Settings::load();
 
     let matches = get_command_line_matches();
     let (sub_name, sub_matches) = matches.subcommand();
     if sub_name == "set-storage-path" {
         let path_str = sub_matches.unwrap().value_of("path").unwrap();
-        let path = PathBuf::from(path_str);
-        if path.components().next() == None {
-            bail!("You must specify a path");
-        }
-
-        settings.storage_path = if path.is_absolute() {
-            path
-        } else {
-            std::env::current_dir()?.join(path)
-        };
-
-        if let Err(e) = std::fs::create_dir_all(&settings.storage_path) {
-            if e.kind() != std::io::ErrorKind::AlreadyExists {
-                bail!(e);
-            }
-        }
-
-        settings.save()?;
-
-        println!(
-            "Your storage path has been set to {}",
-            settings.storage_path.display()
-        );
-
-        return Ok(());
+        return set_storage_path(Path::new(path_str), &mut settings);
     }
 
     if !settings.storage_path.is_absolute() {
-        bail!(ErrorKind::StoragePathNotSet);
+        bail!(
+            "The configured storage path isn't absolute ({})",
+            settings.storage_path.display()
+        );
     }
 
-    Linker::check_reparse_privilege()?;
+    if Linker::check_reparse_privilege().is_err() {
+        bail!(
+            "You don't have the required privileges to create links. Try running as administrator"
+        );
+    }
 
     let db = Database::new(&settings.storage_path)?;
 
@@ -122,4 +132,11 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn main() {
+    if let Err(err) = run() {
+        eprintln!("{}", err);
+        std::process::exit(1);
+    }
 }
