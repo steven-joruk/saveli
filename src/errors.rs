@@ -14,10 +14,6 @@ error_chain! {
             display("The storage path has not been set")
         }
 
-        LinkPermission {
-            display("You don't have the required privileges to create links. Try running as administrator")
-        }
-
         DestinationDoesNotExist(path: PathBuf) {
             display("No file or directory exists at {}", path.display())
         }
