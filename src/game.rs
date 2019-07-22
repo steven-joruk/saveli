@@ -1,5 +1,7 @@
+use crate::database::Database;
 use crate::errors::{Error, Result};
 use crate::linker::Linker;
+use crate::settings::Settings;
 use serde::{Deserialize, Deserializer};
 use std::path::{Path, PathBuf};
 
@@ -36,6 +38,52 @@ pub struct Game {
 }
 
 impl Game {
+    pub fn link_all(db: &Database, settings: &Settings) -> Result<()> {
+        let movable = Game::all_with_movable_saves(&db.games);
+        println!(
+            "Found {} games with saves in their standard locations",
+            movable.len()
+        );
+
+        for game in movable {
+            if let Err(e) = game.link(&settings.storage_path, settings.dry_run) {
+                eprintln!("{}", e);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn restore_all(db: &Database, settings: &Settings) -> Result<()> {
+        let restorable = Game::all_with_moved_saves(&db.games, &settings.storage_path);
+        println!(
+            "Found {} games with saves moved to {}",
+            restorable.len(),
+            settings.storage_path.display()
+        );
+
+        for game in restorable {
+            if let Err(e) = game.restore(&settings.storage_path, settings.dry_run) {
+                eprintln!("{}", e);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn unlink_all(db: &Database, settings: &Settings) -> Result<()> {
+        let restorable = Game::all_with_moved_saves(&db.games, &settings.storage_path);
+        println!("Found {} games with moved saves", restorable.len());
+
+        for game in restorable {
+            if let Err(e) = game.unlink(&settings.storage_path, settings.dry_run) {
+                eprintln!("{}", e);
+            }
+        }
+
+        Ok(())
+    }
+
     /// Returns all games which have existing save paths. This will also return
     /// games which aren't installed.
     pub fn all_with_saves(games: &[Game]) -> Vec<&Game> {
