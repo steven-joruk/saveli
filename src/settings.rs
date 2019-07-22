@@ -24,6 +24,7 @@ impl Settings {
 
     pub fn save(&self) -> Result<()> {
         let path = Settings::get_settings_path()?;
+        println!("Saving settings to {}", path.display());
         let file = std::fs::File::create(&path)?;
         Ok(serde_json::to_writer_pretty(&file, self)?)
     }

@@ -30,8 +30,8 @@ where
 
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct Game {
-    title: String,
-    id: String,
+    pub title: String,
+    pub id: String,
     saves: Vec<SavePath>,
 }
 
@@ -60,6 +60,8 @@ impl Game {
     pub fn link(&self, storage_path: &Path, dry_run: bool) -> Result<()> {
         let game_storage_path = storage_path.join(&self.id);
         if !dry_run {
+            Linker::verify_reparse_privilege()?;
+
             if let Err(e) = std::fs::create_dir_all(&game_storage_path) {
                 if e.kind() != std::io::ErrorKind::AlreadyExists {
                     return Err(Error::from(e));
@@ -94,6 +96,10 @@ impl Game {
     /// If saves exist, it will attempt to create links. It will fail if real
     /// files or directories already exist.
     pub fn restore(&self, storage_path: &Path, dry_run: bool) -> Result<()> {
+        if !dry_run {
+            Linker::verify_reparse_privilege()?;
+        }
+
         for s in &self.saves {
             let dest = storage_path.join(&self.id).join(&s.id);
             println!(
@@ -113,6 +119,10 @@ impl Game {
 
     /// The inverse of link.
     pub fn unlink(&self, storage_path: &Path, dry_run: bool) -> Result<()> {
+        if !dry_run {
+            Linker::verify_reparse_privilege()?;
+        }
+
         for s in &self.saves {
             let dest = storage_path.join(&self.id).join(&s.id);
             // TODO: Check it exists

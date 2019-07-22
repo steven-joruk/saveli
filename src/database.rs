@@ -44,6 +44,26 @@ impl Database {
 
         Ok(db)
     }
+
+    pub fn search(&self, keyword: &str) {
+        if keyword.is_empty() {
+            eprintln!("The keyword must not be empty");
+            return;
+        }
+
+        let mut missed = true;
+
+        for game in &self.games {
+            if game.id.contains(keyword) || game.title.contains(keyword) {
+                println!("Found {}", game.id);
+                missed = false;
+            }
+        }
+
+        if missed {
+            println!("Couldn't find any matching games");
+        }
+    }
 }
 
 #[cfg(test)]

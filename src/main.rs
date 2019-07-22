@@ -50,6 +50,11 @@ fn get_command_line_matches() -> ArgMatches<'static> {
                 .about("The inverse of link.")
                 .arg(Arg::with_name("dry-run").short("d").long("dry-run")),
         )
+        .subcommand(
+            SubCommand::with_name("search")
+                .about("Search the database for the keyword")
+                .arg(Arg::with_name("keyword").index(1).required(true)),
+        )
         .get_matches()
 }
 
@@ -143,24 +148,18 @@ fn run() -> Result<()> {
         );
     }
 
-    settings.dry_run = if sub_matches.unwrap().is_present("dry-run") {
-        println!("This is a dry run, none of the actions will be committed.");
-        true
-    } else {
-        if Linker::check_reparse_privilege().is_err() {
-            bail!(
-                "You don't have the required privileges to create links. Try running as administrator"
-            );
-        }
-        false
-    };
-
     let db = Database::new(&settings.storage_path)?;
+
+    settings.dry_run = sub_matches.unwrap().is_present("dry-run");
 
     match sub_name {
         "link" => link(&db, &settings)?,
         "restore" => restore(&db, &settings)?,
         "unlink" => unlink(&db, &settings)?,
+        "search" => {
+            let keyword = sub_matches.unwrap().value_of("keyword").unwrap();
+            db.search(&keyword);
+        }
         _ => unreachable!(),
     }
 

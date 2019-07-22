@@ -10,10 +10,16 @@ pub struct Linker;
 
 impl Linker {
     #[cfg(windows)]
-    pub fn check_reparse_privilege() -> Result<()> {
+    pub fn verify_reparse_privilege() -> Result<()> {
         let src = tempfile::tempdir()?.into_path().join("src");
         let dest = tempfile::tempdir()?.into_path();
-        Linker::symlink(&src, &dest)
+        if Linker::symlink(&src, &dest).is_err() {
+            bail!(
+                "You don't have the required privileges to create links. Try running as administrator"
+            );
+        }
+
+        Ok(())
     }
 
     /// Create a symbolic link from `from` to `to`. `from` must not exist, and
