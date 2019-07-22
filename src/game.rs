@@ -46,7 +46,9 @@ impl Game {
         );
 
         for game in movable {
-            if let Err(e) = game.link(&settings.storage_path, settings.dry_run) {
+            if settings.game_is_ignored(&game.id) {
+                println!("{} is ignored, skipping", game.title);
+            } else if let Err(e) = game.link(&settings.storage_path, settings.dry_run) {
                 eprintln!("{}", e);
             }
         }
@@ -63,7 +65,9 @@ impl Game {
         );
 
         for game in restorable {
-            if let Err(e) = game.restore(&settings.storage_path, settings.dry_run) {
+            if settings.game_is_ignored(&game.id) {
+                println!("{} is ignored, skipping", game.title);
+            } else if let Err(e) = game.restore(&settings.storage_path, settings.dry_run) {
                 eprintln!("{}", e);
             }
         }
@@ -76,7 +80,9 @@ impl Game {
         println!("Found {} games with moved saves", restorable.len());
 
         for game in restorable {
-            if let Err(e) = game.unlink(&settings.storage_path, settings.dry_run) {
+            if settings.game_is_ignored(&game.id) {
+                println!("{} is ignored, skipping", game.title);
+            } else if let Err(e) = game.unlink(&settings.storage_path, settings.dry_run) {
                 eprintln!("{}", e);
             }
         }
@@ -84,18 +90,12 @@ impl Game {
         Ok(())
     }
 
-    /// Returns all games which have existing save paths. This will also return
-    /// games which aren't installed.
-    pub fn all_with_saves(games: &[Game]) -> Vec<&Game> {
-        games.iter().filter(|g| g.has_saves()).collect()
-    }
-
-    pub fn all_with_movable_saves(games: &[Game]) -> Vec<&Game> {
+    fn all_with_movable_saves(games: &[Game]) -> Vec<&Game> {
         games.iter().filter(|g| g.has_movable_saves()).collect()
     }
 
     /// Returns games which have saves in the storage path.
-    pub fn all_with_moved_saves<'g>(games: &'g [Game], storage_path: &Path) -> Vec<&'g Game> {
+    fn all_with_moved_saves<'g>(games: &'g [Game], storage_path: &Path) -> Vec<&'g Game> {
         games
             .iter()
             .filter(|g| !g.id.is_empty())
@@ -198,10 +198,6 @@ impl Game {
         Ok(())
     }
 
-    fn has_saves(&self) -> bool {
-        self.saves.iter().any(|s| Path::exists(&s.path))
-    }
-
     fn has_movable_saves(&self) -> bool {
         self.saves
             .iter()
@@ -215,21 +211,6 @@ impl Game {
 #[cfg(test)]
 mod tests {
     use crate::game::{Game, SavePath};
-
-    #[test]
-    fn test_all_with_saves_matches() {
-        let mut game = Game::default();
-        game.saves = vec![SavePath {
-            path: tempfile::tempdir().unwrap().into_path(),
-            ..Default::default()
-        }];
-        assert_eq!(Game::all_with_saves(&vec![game]).len(), 1)
-    }
-
-    #[test]
-    fn test_all_with_saves_empty() {
-        assert_eq!(Game::all_with_saves(&vec![Game::default()]).len(), 0)
-    }
 
     #[test]
     fn test_all_with_moved_saves_matches() {

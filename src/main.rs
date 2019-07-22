@@ -54,6 +54,14 @@ fn get_command_line_matches() -> ArgMatches<'static> {
                 .about("Search the database for the keyword")
                 .arg(Arg::with_name("keyword").index(1).required(true)),
         )
+        .subcommand(
+            SubCommand::with_name("ignore")
+                .about(
+                    "Ignore a game entry by id, preventing it from being \
+                     linked, restored or unlinked",
+                )
+                .arg(Arg::with_name("id").index(1).required(true)),
+        )
         .get_matches()
 }
 
@@ -85,13 +93,23 @@ fn set_storage_path(path: &Path, settings: &mut Settings) -> Result<()> {
 }
 
 fn run() -> Result<()> {
-    let mut settings = Settings::load();
+    let mut settings = match Settings::load() {
+        Err(err) => {
+            eprintln!("{}", err);
+            Settings::default()
+        }
+        Ok(s) => s,
+    };
 
     let matches = get_command_line_matches();
     let (sub_name, sub_matches) = matches.subcommand();
     if sub_name == "set-storage-path" {
         let path_str = sub_matches.unwrap().value_of("path").unwrap();
         return set_storage_path(Path::new(path_str), &mut settings);
+    }
+
+    if settings.storage_path.components().next() == None {
+        bail!("You must set the storage path.")
     }
 
     if !settings.storage_path.is_absolute() {
@@ -112,6 +130,17 @@ fn run() -> Result<()> {
         "search" => {
             let keyword = sub_matches.unwrap().value_of("keyword").unwrap();
             db.search(&keyword);
+        }
+        "ignore" => {
+            let id = sub_matches.unwrap().value_of("id").unwrap();
+            if id.is_empty() {
+                bail!("The game id must not be empty");
+            }
+
+            match db.games.iter().find(|g| g.id == id) {
+                Some(g) => settings.ignore_game(&g)?,
+                None => eprintln!("Couldn't find a game with id {}", id),
+            }
         }
         _ => unreachable!(),
     }

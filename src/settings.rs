@@ -1,4 +1,5 @@
 use crate::errors::*;
+use crate::game::Game;
 use app_dirs::{AppDataType, AppInfo};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -14,6 +15,8 @@ pub struct Settings {
     pub storage_path: PathBuf,
     #[serde(skip)]
     pub dry_run: bool,
+    #[serde(default)]
+    ignored: Vec<String>,
 }
 
 impl Settings {
@@ -29,15 +32,19 @@ impl Settings {
         Ok(serde_json::to_writer_pretty(&file, self)?)
     }
 
-    pub fn load() -> Settings {
-        if let Ok(path) = Settings::get_settings_path() {
-            if let Ok(data) = std::fs::read_to_string(&path) {
-                if let Ok(settings) = serde_json::from_str(&data) {
-                    return settings;
-                }
-            }
-        }
+    pub fn load() -> Result<Settings> {
+        let path = Settings::get_settings_path()?;
+        let data = std::fs::read_to_string(&path)?;
+        Ok(serde_json::from_str(&data)?)
+    }
 
-        Settings::default()
+    pub fn ignore_game(&mut self, game: &Game) -> Result<()> {
+        println!("Ignoring {}", game.title);
+        self.ignored.push(game.id.clone());
+        self.save()
+    }
+
+    pub fn game_is_ignored(&self, id: &String) -> bool {
+        return self.ignored.contains(id);
     }
 }

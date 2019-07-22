@@ -3,7 +3,7 @@
     "games": [
         {
             "title": "Dark Souls III",
-            "id": "DarkSoulsIII",
+            "id": "darksoulsiii",
             "saves": [
                 {
                     "id": "general",
