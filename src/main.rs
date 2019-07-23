@@ -32,7 +32,7 @@ fn get_command_line_matches() -> ArgMatches<'static> {
             SubCommand::with_name("link")
                 .about(
                     "Move game saves from their original locations to the \
-                     storage path and create links to their new location.",
+                     storage path and create links to their new location",
                 )
                 .arg(Arg::with_name("dry-run").short("d").long("dry-run")),
         )
@@ -40,7 +40,7 @@ fn get_command_line_matches() -> ArgMatches<'static> {
             SubCommand::with_name("restore")
                 .about(
                     "Creates links to game saves which have been moved to the \
-                     storage path.",
+                     storage path",
                 )
                 .arg(Arg::with_name("dry-run").short("d").long("dry-run")),
         )

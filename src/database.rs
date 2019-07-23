@@ -55,7 +55,7 @@ impl Database {
 
         for game in &self.games {
             if game.id.contains(keyword) || game.title.contains(keyword) {
-                println!("Found {}", game.id);
+                println!("Found {} ({})", game.title, game.id);
                 missed = false;
             }
         }
