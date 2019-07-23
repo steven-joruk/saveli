@@ -25,7 +25,7 @@ fn get_command_line_matches() -> ArgMatches<'static> {
         .setting(AppSettings::DisableHelpSubcommand)
         .subcommand(
             SubCommand::with_name("set-storage-path")
-                .about("Set where game saves and meta data should be stored.")
+                .about("Set where game saves and meta data should be stored")
                 .arg(Arg::with_name("path").index(1).required(true)),
         )
         .subcommand(

@@ -4,10 +4,9 @@ use app_dirs::{AppDataType, AppInfo};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-// TODO: Get from Cargo.toml
 const APP_INFO: AppInfo = AppInfo {
-    name: "saveli",
-    author: "saveli-project",
+    name: env!("CARGO_PKG_NAME"),
+    author: concat!(env!("CARGO_PKG_NAME"), "-project"),
 };
 
 #[derive(Default, Deserialize, Serialize)]
