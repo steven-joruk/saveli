@@ -1,5 +1,5 @@
 use crate::database::Database;
-use crate::errors::{Error, Result};
+use crate::errors::Result;
 use crate::linker::Linker;
 use crate::settings::Settings;
 use serde::{Deserialize, Serialize};
@@ -165,11 +165,14 @@ impl Game {
     pub fn link(&self, storage_path: &Path, dry_run: bool) -> Result<()> {
         let game_storage_path = storage_path.join(&self.id);
         if !dry_run {
-            Linker::verify_reparse_privilege()?;
+            #[cfg(windows)]
+            {
+                Linker::verify_reparse_privilege()?;
 
-            if let Err(e) = std::fs::create_dir_all(&game_storage_path) {
-                if e.kind() != std::io::ErrorKind::AlreadyExists {
-                    return Err(Error::from(e));
+                if let Err(e) = std::fs::create_dir_all(&game_storage_path) {
+                    if e.kind() != std::io::ErrorKind::AlreadyExists {
+                        return Err(Error::from(e));
+                    }
                 }
             }
         }
@@ -202,6 +205,7 @@ impl Game {
     /// files or directories already exist.
     pub fn restore(&self, storage_path: &Path, dry_run: bool) -> Result<()> {
         if !dry_run {
+            #[cfg(windows)]
             Linker::verify_reparse_privilege()?;
         }
 
@@ -225,6 +229,7 @@ impl Game {
     /// The inverse of link.
     pub fn unlink(&self, storage_path: &Path, dry_run: bool) -> Result<()> {
         if !dry_run {
+            #[cfg(windows)]
             Linker::verify_reparse_privilege()?;
         }
 
