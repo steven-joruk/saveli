@@ -36,11 +36,15 @@ impl Database {
     }
 
     fn load<T: AsRef<str>>(data: T) -> Result<Database> {
-        let db: Database = serde_json::from_str(data.as_ref())?;
+        let mut db: Database = serde_json::from_str(data.as_ref())?;
 
         if db.version > VERSION {
             bail!(ErrorKind::DatabaseTooNew(db.version, VERSION));
         }
+
+        // The sorting of Game prioratises customisations.
+        db.games.sort();
+        db.games.dedup();
 
         Ok(db)
     }

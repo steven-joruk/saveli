@@ -3,6 +3,7 @@ use crate::errors::{Error, Result};
 use crate::linker::Linker;
 use crate::settings::Settings;
 use serde::{Deserialize, Deserializer};
+use std::cmp::{Ord, Ordering, PartialOrd};
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -34,7 +35,40 @@ where
 pub struct Game {
     pub title: String,
     pub id: String,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_false")]
+    custom: bool,
     saves: Vec<SavePath>,
+}
+
+impl PartialOrd for Game {
+    fn partial_cmp(&self, other: &Game) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Game {
+    fn cmp(&self, other: &Game) -> Ordering {
+        if self.id < other.id {
+            return Ordering::Less;
+        } else if self.id > other.id {
+            return Ordering::Greater;
+        } else if self.custom && !other.custom {
+            return Ordering::Less;
+        } else if !self.custom && other.custom {
+            return Ordering::Greater;
+        } else {
+            return self.title.cmp(&other.title);
+        }
+    }
+}
+
+impl Eq for Game {}
+
+impl PartialEq for Game {
+    fn eq(&self, other: &Game) -> bool {
+        self.id == other.id
+    }
 }
 
 impl Game {
