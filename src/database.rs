@@ -1,32 +1,45 @@
 use crate::errors::*;
 use crate::game::Game;
-use serde::Deserialize;
-use std::io::Write;
-use std::path::Path;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 const VERSION: usize = 1;
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Serialize)]
 pub struct Database {
     version: usize,
     pub games: Vec<Game>,
+    #[serde(skip)]
+    path: PathBuf,
 }
 
 impl Database {
     pub fn new<T: AsRef<Path>>(storage_path: T) -> Result<Database> {
+        let mut db: Database;
+
         let windows_path = storage_path.as_ref().join("windows.json");
-        if !windows_path.exists() {
-            println!("Creating {}", windows_path.display());
-            let mut f = std::fs::File::create(&windows_path)?;
-            f.write_all(include_bytes!("../res/windows.json"))?;
+        if windows_path.exists() {
+            db = Database::load_from(&windows_path)?;
+        } else {
+            db = Database::load(include_str!("../res/windows.json"))?;
+            db.path = windows_path;
+            db.save()?;
         }
 
-        Database::load_from(&windows_path)
+        Ok(db)
+    }
+
+    pub fn save(&self) -> Result<()> {
+        println!("Saving {}", self.path.display());
+        let f = std::fs::File::create(&self.path)?;
+        serde_json::to_writer_pretty(f, self)?;
+        Ok(())
     }
 
     fn load_from<T: AsRef<Path>>(path: T) -> Result<Database> {
         let data = std::fs::read_to_string(&path)?;
-        let db = Database::load(data)?;
+        let mut db = Database::load(data)?;
+        db.path = path.as_ref().to_path_buf();
         println!(
             "Loaded {} game entries from {}",
             db.games.len(),
@@ -45,6 +58,13 @@ impl Database {
         // The sorting of Game prioratises customisations.
         db.games.sort();
         db.games.dedup();
+
+        // Convert path variables to expanded paths
+        for game in &mut db.games {
+            for save in &mut game.saves {
+                save.update_path()?;
+            }
+        }
 
         Ok(db)
     }
@@ -67,6 +87,12 @@ impl Database {
         if missed {
             println!("Couldn't find any matching games");
         }
+    }
+
+    pub fn add(&mut self, game: Game) -> Result<()> {
+        self.games.retain(|g| !(*g == game && g.custom));
+        self.games.push(game);
+        self.save()
     }
 }
 

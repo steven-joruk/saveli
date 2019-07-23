@@ -2,43 +2,66 @@ use crate::database::Database;
 use crate::errors::{Error, Result};
 use crate::linker::Linker;
 use crate::settings::Settings;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Serialize};
 use std::cmp::{Ord, Ordering, PartialOrd};
 use std::path::{Path, PathBuf};
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct SavePath {
-    id: String,
-    #[serde(deserialize_with = "deserialize_path")]
-    path: PathBuf,
+    pub id: String,
+    path: String,
+    // It would be much nicer to be able to set this as part of finalizing the
+    // deserialization of the SavePath. Remove update_path if this gets fixed.
+    // Watch https://github.com/serde-rs/serde/issues/642
+    #[serde(skip)]
+    pub expanded: PathBuf,
 }
 
-fn deserialize_path<'de, D>(deserializer: D) -> std::result::Result<PathBuf, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let orig = String::deserialize(deserializer)?;
-    let expanded = shellexpand::env(&orig)
-        .map_err(serde::de::Error::custom)?
-        .into_owned();
+impl SavePath {
+    pub fn new<T: AsRef<str>>(id: String, path: T) -> Result<SavePath> {
+        let mut save_path = SavePath {
+            id,
+            ..Default::default()
+        };
 
-    let path = PathBuf::from(&expanded);
-    if path.is_relative() {
-        let msg = format!("ignoring relative path: {}", path.display());
-        return Err(serde::de::Error::custom(msg));
+        save_path.set_path(path)?;
+        Ok(save_path)
     }
 
-    Ok(path)
+    pub fn update_path(&mut self) -> Result<()> {
+        let path = self.path.to_owned();
+        self.set_path(&path)
+    }
+
+    pub fn set_path<T: AsRef<str>>(&mut self, path: T) -> Result<()> {
+        let trimmed = path.as_ref().trim();
+        if !trimmed.starts_with('$') {
+            eprintln!("The path doesn't start with a variable: {}", trimmed);
+        }
+
+        self.path = trimmed.to_owned();
+        let expanded_str = shellexpand::env(&self.path).unwrap_or_default();
+        self.expanded = PathBuf::from(expanded_str.into_owned());
+        if self.expanded.is_relative() {
+            bail!("Found relative path: {}", self.expanded.display());
+        }
+
+        Ok(())
+    }
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Game {
     pub title: String,
     pub id: String,
     #[serde(default)]
     #[serde(skip_serializing_if = "is_false")]
-    custom: bool,
-    saves: Vec<SavePath>,
+    pub custom: bool,
+    pub saves: Vec<SavePath>,
+}
+
+fn is_false(v: &bool) -> bool {
+    !*v
 }
 
 impl PartialOrd for Game {
@@ -50,15 +73,15 @@ impl PartialOrd for Game {
 impl Ord for Game {
     fn cmp(&self, other: &Game) -> Ordering {
         if self.id < other.id {
-            return Ordering::Less;
+            Ordering::Less
         } else if self.id > other.id {
-            return Ordering::Greater;
+            Ordering::Greater
         } else if self.custom && !other.custom {
-            return Ordering::Less;
+            Ordering::Less
         } else if !self.custom && other.custom {
-            return Ordering::Greater;
+            Ordering::Greater
         } else {
-            return self.title.cmp(&other.title);
+            self.title.cmp(&other.title)
         }
     }
 }
@@ -156,19 +179,19 @@ impl Game {
             println!(
                 "Linking {}'s {} to {}",
                 self.title,
-                s.path.display(),
+                s.expanded.display(),
                 dest.display()
             );
 
             if !dry_run {
-                println!("Moving {} to {}", s.path.display(), dest.display());
-                Linker::move_item(&s.path, &dest)?;
+                println!("Moving {} to {}", s.expanded.display(), dest.display());
+                Linker::move_item(&s.expanded, &dest)?;
                 println!(
                     "Creating a link from {} to {}",
-                    s.path.display(),
+                    s.expanded.display(),
                     dest.display()
                 );
-                Linker::symlink(&s.path, &dest)?;
+                Linker::symlink(&s.expanded, &dest)?;
             }
         }
 
@@ -187,12 +210,12 @@ impl Game {
             println!(
                 "Restoring {}'s {} from {}",
                 self.title,
-                s.path.display(),
+                s.expanded.display(),
                 dest.display()
             );
 
             if !dry_run {
-                Linker::symlink(&s.path, &dest)?;
+                Linker::symlink(&s.expanded, &dest)?;
             }
         }
 
@@ -211,15 +234,15 @@ impl Game {
             println!(
                 "Unlinking {}'s {} from {}",
                 self.title,
-                s.path.display(),
+                s.expanded.display(),
                 dest.display()
             );
 
             if !dry_run {
-                println!("Removing {}", s.path.display());
+                println!("Removing {}", s.expanded.display());
                 std::fs::remove_dir(&s.path)?;
-                println!("Moving {} to {}", dest.display(), s.path.display());
-                Linker::move_item(&dest, &s.path)?;
+                println!("Moving {} to {}", dest.display(), s.expanded.display());
+                Linker::move_item(&dest, &s.expanded)?;
             }
         }
 
@@ -235,7 +258,7 @@ impl Game {
     fn has_movable_saves(&self) -> bool {
         self.saves
             .iter()
-            .any(|s| match std::fs::symlink_metadata(&s.path) {
+            .any(|s| match std::fs::symlink_metadata(&s.expanded) {
                 Ok(md) => !md.file_type().is_symlink(),
                 Err(_) => false,
             })
@@ -249,7 +272,7 @@ mod tests {
     #[test]
     fn test_all_with_moved_saves_matches() {
         let game = Game {
-            id: String::from("gameid"),
+            id: "gameid".to_owned(),
             ..Default::default()
         };
         let storage_path = tempfile::tempdir().unwrap().into_path();
@@ -274,11 +297,8 @@ mod tests {
         let src = tempfile::NamedTempFile::new().unwrap().into_temp_path();
         assert!(src.exists());
         let game = Game {
-            id: String::from("gameid"),
-            saves: vec![SavePath {
-                id: String::from("saveid"),
-                path: src.to_path_buf(),
-            }],
+            id: "gameid".to_owned(),
+            saves: vec![SavePath::new("saveid".to_owned(), src.to_str().unwrap()).unwrap()],
             ..Default::default()
         };
         let storage_path = tempfile::tempdir().unwrap().into_path();
@@ -292,11 +312,8 @@ mod tests {
         let src = tempfile::tempdir().unwrap().into_path();
         assert!(src.exists());
         let game = Game {
-            id: String::from("gameid"),
-            saves: vec![SavePath {
-                id: String::from("saveid"),
-                path: src.to_path_buf(),
-            }],
+            id: "gameid".to_owned(),
+            saves: vec![SavePath::new("saveid".to_owned(), src.to_str().unwrap()).unwrap()],
             ..Default::default()
         };
         let storage_path = tempfile::tempdir().unwrap().into_path();
@@ -310,11 +327,8 @@ mod tests {
         let src = tempfile::NamedTempFile::new().unwrap().into_temp_path();
         assert!(src.exists());
         let game = Game {
-            id: String::from("gameid"),
-            saves: vec![SavePath {
-                id: String::from("saveid"),
-                path: src.to_path_buf(),
-            }],
+            id: "gameid".to_owned(),
+            saves: vec![SavePath::new("saveid".to_owned(), src.to_str().unwrap()).unwrap()],
             ..Default::default()
         };
         let storage_path = tempfile::tempdir().unwrap().into_path();
@@ -329,11 +343,8 @@ mod tests {
         let src = tempfile::tempdir().unwrap().into_path();
         assert!(src.exists());
         let game = Game {
-            id: String::from("gameid"),
-            saves: vec![SavePath {
-                id: String::from("saveid"),
-                path: src.to_path_buf(),
-            }],
+            id: "gameid".to_owned(),
+            saves: vec![SavePath::new("saveid".to_owned(), src.to_str().unwrap()).unwrap()],
             ..Default::default()
         };
         let storage_path = tempfile::tempdir().unwrap().into_path();

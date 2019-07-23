@@ -67,6 +67,13 @@ fn get_command_line_matches() -> ArgMatches<'static> {
                 .about("The inverse of ignore")
                 .arg(Arg::with_name("id").index(1).required(true)),
         )
+        .subcommand(
+            SubCommand::with_name("add")
+                .about("Add a game to the database")
+                .arg(Arg::with_name("title").index(1).required(true))
+                .arg(Arg::with_name("id").index(2).required(true))
+                .arg(Arg::with_name("path").index(3).required(true)),
+        )
         .get_matches()
 }
 
@@ -107,9 +114,13 @@ fn run() -> Result<()> {
     };
 
     let matches = get_command_line_matches();
-    let (sub_name, sub_matches) = matches.subcommand();
+    let (sub_name, sub_matches) = match matches.subcommand() {
+        (n, Some(m)) => (n, m),
+        _ => unreachable!(),
+    };
+
     if sub_name == "set-storage-path" {
-        let path_str = sub_matches.unwrap().value_of("path").unwrap();
+        let path_str = sub_matches.value_of("path").unwrap();
         return set_storage_path(Path::new(path_str), &mut settings);
     }
 
@@ -124,20 +135,20 @@ fn run() -> Result<()> {
         );
     }
 
-    let db = Database::new(&settings.storage_path)?;
+    let mut db = Database::new(&settings.storage_path)?;
 
-    settings.dry_run = sub_matches.unwrap().is_present("dry-run");
+    settings.dry_run = sub_matches.is_present("dry-run");
 
     match sub_name {
         "link" => Game::link_all(&db, &settings)?,
         "restore" => Game::restore_all(&db, &settings)?,
         "unlink" => Game::unlink_all(&db, &settings)?,
         "search" => {
-            let keyword = sub_matches.unwrap().value_of("keyword").unwrap();
+            let keyword = sub_matches.value_of("keyword").unwrap();
             db.search(&keyword);
         }
         "ignore" => {
-            let id = sub_matches.unwrap().value_of("id").unwrap();
+            let id = sub_matches.value_of("id").unwrap();
             if id.is_empty() {
                 bail!("The game id must not be empty");
             }
@@ -148,7 +159,7 @@ fn run() -> Result<()> {
             }
         }
         "heed" => {
-            let id = sub_matches.unwrap().value_of("id").unwrap();
+            let id = sub_matches.value_of("id").unwrap();
             if id.is_empty() {
                 bail!("The game id must not be empty");
             }
@@ -157,6 +168,19 @@ fn run() -> Result<()> {
                 Some(g) => settings.heed_game(&g)?,
                 None => eprintln!("Couldn't find a game with id {}", id),
             }
+        }
+        "add" => {
+            let game = Game {
+                id: sub_matches.value_of("id").unwrap().to_owned(),
+                title: sub_matches.value_of("title").unwrap().to_owned(),
+                custom: true,
+                saves: vec![game::SavePath::new(
+                    "primary".to_owned(),
+                    sub_matches.value_of("path").unwrap().to_owned(),
+                )?],
+            };
+            println!("Adding {}", game.title);
+            db.add(game)?;
         }
         _ => unreachable!(),
     }

@@ -49,7 +49,8 @@ impl Settings {
         self.save()
     }
 
-    pub fn game_is_ignored(&self, id: &String) -> bool {
-        return self.ignored.contains(id);
+    pub fn game_is_ignored(&self, id: &str) -> bool {
+        // Vec::contains can't accept a &str to find a String
+        self.ignored.iter().any(|ignored| ignored == id)
     }
 }
