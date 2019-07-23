@@ -44,6 +44,12 @@ impl Settings {
         self.save()
     }
 
+    pub fn heed_game(&mut self, game: &Game) -> Result<()> {
+        println!("Heeding {}", game.title);
+        self.ignored.retain(|id| *id != game.id);
+        self.save()
+    }
+
     pub fn game_is_ignored(&self, id: &String) -> bool {
         return self.ignored.contains(id);
     }

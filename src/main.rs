@@ -46,7 +46,7 @@ fn get_command_line_matches() -> ArgMatches<'static> {
         )
         .subcommand(
             SubCommand::with_name("unlink")
-                .about("The inverse of link.")
+                .about("The inverse of link")
                 .arg(Arg::with_name("dry-run").short("d").long("dry-run")),
         )
         .subcommand(
@@ -60,6 +60,11 @@ fn get_command_line_matches() -> ArgMatches<'static> {
                     "Ignore a game entry by id, preventing it from being \
                      linked, restored or unlinked",
                 )
+                .arg(Arg::with_name("id").index(1).required(true)),
+        )
+        .subcommand(
+            SubCommand::with_name("heed")
+                .about("The inverse of ignore")
                 .arg(Arg::with_name("id").index(1).required(true)),
         )
         .get_matches()
@@ -139,6 +144,17 @@ fn run() -> Result<()> {
 
             match db.games.iter().find(|g| g.id == id) {
                 Some(g) => settings.ignore_game(&g)?,
+                None => eprintln!("Couldn't find a game with id {}", id),
+            }
+        }
+        "heed" => {
+            let id = sub_matches.unwrap().value_of("id").unwrap();
+            if id.is_empty() {
+                bail!("The game id must not be empty");
+            }
+
+            match db.games.iter().find(|g| g.id == id) {
+                Some(g) => settings.heed_game(&g)?,
                 None => eprintln!("Couldn't find a game with id {}", id),
             }
         }
