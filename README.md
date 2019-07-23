@@ -5,20 +5,26 @@
 Manage links to game saves and other data.
 
 ```
+Saveli 0.1.0
+Steven Joruk <steven@joruk.com>
 Moves game saves and creates links in their place.
 
 USAGE:
-    saveli.exe <storage-path> <--link|--restore>
+    saveli.exe [SUBCOMMAND]
 
 FLAGS:
     -h, --help       Prints help information
-    -l, --link       Move game saves from their original locations to the storage path and create links to their new
-                     location.
-    -r, --restore    Creates links to game saves which have been moved to the storage path.
     -v, --version    Prints version information
 
-ARGS:
-    <storage-path>    The location game saves and meta data should be stored.
+SUBCOMMANDS:
+    heed                The inverse of ignore
+    ignore              Ignore a game entry by id, preventing it from being linked, restored or unlinked
+    link                Move game saves from their original locations to the storage path and create links to their
+                        new location
+    restore             Creates links to game saves which have been moved to the storage path
+    search              Search the database for the keyword
+    set-storage-path    Set where game saves and meta data should be stored.
+    unlink              The inverse of link
 ```
 
 ## FAQ
