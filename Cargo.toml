@@ -8,11 +8,11 @@ edition = "2018"
 lto = true
 
 [dependencies]
-app_dirs = ""
+app_dirs = "1"
 clap = "2"
 error-chain = { version = "0.12", default-features = false }
-fs_extra = "1.1"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-shellexpand = "1.0"
-tempfile = "3.1"
+fs_extra = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+shellexpand = "1"
+tempfile = "3"
