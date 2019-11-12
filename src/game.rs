@@ -166,19 +166,18 @@ impl Game {
         let game_storage_path = storage_path.join(&self.id);
         if !dry_run {
             #[cfg(windows)]
-            {
-                Linker::verify_reparse_privilege()?;
+            Linker::verify_reparse_privilege()?;
 
-                if let Err(e) = std::fs::create_dir_all(&game_storage_path) {
-                    if e.kind() != std::io::ErrorKind::AlreadyExists {
-                        return Err(Error::from(e));
-                    }
+            if let Err(e) = std::fs::create_dir_all(&game_storage_path) {
+                if e.kind() != std::io::ErrorKind::AlreadyExists {
+                    return Err(e.into());
                 }
             }
         }
 
         for s in &self.saves {
             let dest = game_storage_path.join(&s.id);
+
             println!(
                 "Linking {}'s {} to {}",
                 self.title,
